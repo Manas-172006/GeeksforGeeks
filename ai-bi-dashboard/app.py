@@ -1,4 +1,5 @@
 import streamlit as st
+from dataset_loader import load_dataset
 
 # Main Streamlit application that:
 # - loads dataset
@@ -6,10 +7,15 @@ import streamlit as st
 # - calls LLM
 
 def main():
-    st.title("AI BI Dashboard")
+    st.title("AI Business Intelligence Dashboard")
 
     # Load dataset
-    # TODO: Implement dataset loading
+    df = load_dataset()
+
+    # Display dataset info
+    st.write(f"Dataset shape: {df.shape}")
+    st.write("Columns:", list(df.columns))
+    st.dataframe(df.head())
 
     # Accept user prompt
     user_prompt = st.text_input("Enter your query:")
