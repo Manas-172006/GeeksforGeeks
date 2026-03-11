@@ -1,4 +1,10 @@
 streamlit
 pandas
 matplotlib
-openai
+langchain
+langchain-google-genai
+langchain-experimental
+python-dotenv
+tabulate
+plotly
+google-generativeai

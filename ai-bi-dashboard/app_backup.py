@@ -77,16 +77,96 @@ def main():
         data_analyzer = DataAnalyzer()
         chart_generator = ChartGenerator()
         
-        # TOP ROW
+        # Main content area
         col1, col2 = st.columns([2, 1])
 
         with col1:
-            st.header("DATASET OVERVIEW")
+            st.header("📋 Dataset Overview")
             st.write(f"**Shape:** {df.shape[0]} rows × {df.shape[1]} columns")
             st.write("**Columns:**", ", ".join(df.columns.tolist()))
 
+            # Data preview
+            with st.expander("🔍 Preview Data", expanded=True):
+                st.dataframe(df.head(10), width='stretch')
+
+            # Query input
+            st.header("💬 Ask Questions")
+            user_prompt = st.text_area("Enter your query in natural language:", height=100,
+                                       placeholder="e.g., What are the top 5 products by sales? Show me a chart of revenue over time.")
+
+            if st.button("🚀 Analyze", type="primary"):
+                if user_prompt.strip():
+                    with st.spinner("Processing your query..."):
+                        # Process query
+                        query_columns = df.columns.tolist()
+                        parsed_query = query_engine.process_query(user_prompt, query_columns)
+
+                        # Execute Pandas analysis
+                        analysis_result = data_analyzer.analyze(df, parsed_query)
+                        
+                    # Call LLM for explanation based on raw analysis result context
+                    context = str(analysis_result.get('result', analysis_result.get('error', 'No numerical result.')))
+                    try:
+                        # SAFE ADDITION: Formulate prompt for new llm_engine signature
+                        prompt = f"Data Analysis Context:\n{context}\n\nUser Question:\n{user_prompt}\n\nPlease explain the answer clearly and concisely based on the data context."
+                        llm_response = ask_llm(prompt)
+                    except Exception as e:
+                        llm_response = f"LLM error: {e}"
+
+                    # SAFE ADDITION: Natural Language Chart Generation via Plotly
+                    plotly_chart = None
+                    if parsed_query.get('chart_type'):
+                        c_type = parsed_query['chart_type']
+                        cols = parsed_query['matched_columns']
+                        
+                        try:
+                            if c_type == "Histogram" and len(cols) >= 1:
+                                plotly_chart = create_histogram(df, cols[0])
+                            elif c_type == "Bar Chart" and len(cols) >= 1:
+                                y_col = cols[1] if len(cols) >= 2 else None
+                                plotly_chart = create_bar_chart(df, cols[0], y_col)
+                            elif c_type == "Scatter Plot" and len(cols) >= 2:
+                                plotly_chart = create_scatter(df, cols[0], cols[1])
+                            elif c_type == "Pie Chart" and len(cols) >= 1:
+                                plotly_chart = create_pie_chart(df, cols[0])
+                            elif c_type == "Line Chart" and len(cols) >= 2:
+                                plotly_chart = create_line_chart(df, cols[0], cols[1])
+                            elif c_type == "Box Plot" and len(cols) >= 1:
+                                x_col = cols[1] if len(cols) >= 2 else None
+                                plotly_chart = create_boxplot(df, cols[0], x_col)
+                        except Exception as e:
+                            pass # We will fallback to default logic if Plotly fails
+
+                    # Generate default Matplotlib Chart if requested or appropriate AND no plotly chart was made
+                    chart = None
+                    if not plotly_chart and (parsed_query['is_chart'] or parsed_query['intent'] in ['sum', 'average', 'max', 'min']):
+                        chart = chart_generator.generate_chart(analysis_result, parsed_query['intent'])
+
+                st.success("Analysis complete!")
+
+                # Display results
+                st.header("📊 Results")
+                
+                # Show parsed intent for transparency
+                with st.expander("🛠️ Debug Info (Parsed Query)", expanded=False):
+                    st.write(parsed_query)
+                    st.write("Raw Analysis Output:")
+                    st.write(analysis_result)
+
+                st.write("**AI Summary:**")
+                st.info(llm_response)
+
+                if plotly_chart:
+                    st.write("**Visual Representation (Plotly):**")
+                    st.plotly_chart(plotly_chart, use_container_width=True)
+                elif chart:
+                    st.write("**Trend Visualization (Matplotlib):**")
+                    st.pyplot(chart)
+            else:
+                st.warning("Please enter a query.")
+
         with col2:
-            st.header("QUICK STATISTICS")
+            st.header("📈 Quick Stats")
             if df.select_dtypes(include=[float, int]).shape[1] > 0:
                 st.write("**Numeric Columns Summary:**")
                 st.dataframe(df.describe(), width='stretch')
@@ -98,90 +178,6 @@ def main():
             col_types = df.dtypes.to_dict()
             for col, dtype in col_types.items():
                 st.write(f"- {col}: {dtype}")
-
-        st.markdown("---")
-
-        # MIDDLE ROW
-        st.header("DATA PREVIEW")
-        st.dataframe(df.head(10), use_container_width=True)
-
-        st.markdown("---")
-
-        # BOTTOM ROW
-        st.header("AI QUERY ENGINE")
-        user_prompt = st.text_area("Enter your query in natural language:", height=100,
-                                   placeholder="e.g., What are the top 5 products by sales? Show me a chart of revenue over time.")
-
-        if st.button("🚀 Analyze", type="primary"):
-            if user_prompt.strip():
-                with st.spinner("Processing your query..."):
-                    # Process query
-                    query_columns = df.columns.tolist()
-                    parsed_query = query_engine.process_query(user_prompt, query_columns)
-
-                    # Execute Pandas analysis
-                    analysis_result = data_analyzer.analyze(df, parsed_query)
-                    
-                # Call LLM for explanation based on raw analysis result context
-                context = str(analysis_result.get('result', analysis_result.get('error', 'No numerical result.')))
-                try:
-                    # SAFE ADDITION: Formulate prompt for new llm_engine signature
-                    prompt = f"Data Analysis Context:\n{context}\n\nUser Question:\n{user_prompt}\n\nPlease explain the answer clearly and concisely based on the data context."
-                    llm_response = ask_llm(prompt)
-                except Exception as e:
-                    llm_response = f"LLM error: {e}"
-
-                # SAFE ADDITION: Natural Language Chart Generation via Plotly
-                plotly_chart = None
-                if parsed_query.get('chart_type'):
-                    c_type = parsed_query['chart_type']
-                    cols = parsed_query['matched_columns']
-                    
-                    try:
-                        if c_type == "Histogram" and len(cols) >= 1:
-                            plotly_chart = create_histogram(df, cols[0])
-                        elif c_type == "Bar Chart" and len(cols) >= 1:
-                            y_col = cols[1] if len(cols) >= 2 else None
-                            plotly_chart = create_bar_chart(df, cols[0], y_col)
-                        elif c_type == "Scatter Plot" and len(cols) >= 2:
-                            plotly_chart = create_scatter(df, cols[0], cols[1])
-                        elif c_type == "Pie Chart" and len(cols) >= 1:
-                            plotly_chart = create_pie_chart(df, cols[0])
-                        elif c_type == "Line Chart" and len(cols) >= 2:
-                            plotly_chart = create_line_chart(df, cols[0], cols[1])
-                        elif c_type == "Box Plot" and len(cols) >= 1:
-                            x_col = cols[1] if len(cols) >= 2 else None
-                            plotly_chart = create_boxplot(df, cols[0], x_col)
-                    except Exception as e:
-                        pass # We will fallback to default logic if Plotly fails
-
-                # Generate default Matplotlib Chart if requested or appropriate AND no plotly chart was made
-                chart = None
-                if not plotly_chart and (parsed_query['is_chart'] or parsed_query['intent'] in ['sum', 'average', 'max', 'min']):
-                    chart = chart_generator.generate_chart(analysis_result, parsed_query['intent'])
-
-            st.success("Analysis complete!")
-
-            # Display results
-            st.header("📊 Results")
-            
-            # Show parsed intent for transparency
-            with st.expander("🛠️ Debug Info (Parsed Query)", expanded=False):
-                st.write(parsed_query)
-                st.write("Raw Analysis Output:")
-                st.write(analysis_result)
-
-            st.write("**AI Summary:**")
-            st.info(llm_response)
-
-            if plotly_chart:
-                st.write("**Visual Representation (Plotly):**")
-                st.plotly_chart(plotly_chart, use_container_width=True)
-            elif chart:
-                st.write("**Trend Visualization (Matplotlib):**")
-                st.pyplot(chart)
-        else:
-            st.warning("Please enter a query.")
                 
     elif app_mode == "Visual Insights Dashboard":
         tab1, tab2, tab3 = st.tabs(["Dataset Overview", "Interactive Charts", "Auto Insights"])
