@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+import requests
+import json
+
+API_BASE_URL = "http://127.0.0.1:8000/api"
 
 # Engines and Utilities
 from src.data.loader import load_dataset, safe_load_csv
@@ -25,8 +29,68 @@ def main():
 
     st.title("📊 AI Business Intelligence Dashboard")
 
+    # Initialize auth state
+    if "token" not in st.session_state:
+        st.session_state["token"] = None
+    if "user_email" not in st.session_state:
+        st.session_state["user_email"] = None
+
     # Sidebar for dataset upload
     with st.sidebar:
+        st.header("🔐 Authentication")
+        if st.session_state["token"]:
+            st.success(f"Logged in as {st.session_state['user_email']}")
+            if st.button("Logout"):
+                st.session_state["token"] = None
+                st.session_state["user_email"] = None
+                if "current_dataset_id" in st.session_state:
+                    del st.session_state["current_dataset_id"]
+                st.rerun()
+        else:
+            auth_mode = st.radio("Access Mode:", ["Guest", "Login", "Sign Up"], horizontal=True)
+            if auth_mode == "Login":
+                with st.form("login_form"):
+                    email = st.text_input("Email")
+                    password = st.text_input("Password", type="password")
+                    if st.form_submit_button("Login"):
+                        try:
+                            res = requests.post(f"{API_BASE_URL}/auth/login", data={"username": email, "password": password})
+                            if res.status_code == 200:
+                                data = res.json()
+                                st.session_state["token"] = data.get("access_token")
+                                st.session_state["user_email"] = email
+                                st.success("Logged in successfully!")
+                                st.rerun()
+                            else:
+                                try:
+                                    err = res.json().get("detail", "Invalid credentials.")
+                                except Exception:
+                                    err = res.text or "Invalid credentials."
+                                st.error(err)
+                        except Exception as e:
+                            st.error(f"Error connecting to backend: {e}")
+            elif auth_mode == "Sign Up":
+                with st.form("signup_form"):
+                    email = st.text_input("Email")
+                    password = st.text_input("Password", type="password")
+                    if st.form_submit_button("Sign Up"):
+                        try:
+                            res = requests.post(f"{API_BASE_URL}/auth/signup", json={"email": email, "password": password})
+                            if res.status_code == 200:
+                                st.success("Signed up successfully! Please login.")
+                            else:
+                                try:
+                                    err = res.json().get("detail", "Signup failed")
+                                except Exception:
+                                    err = res.text or "Signup failed"
+                                st.error(err)
+                        except Exception as e:
+                            st.error(f"Error connecting to backend: {e}")
+            else:
+                st.info("Running in Guest Mode. Data will not be saved.")
+
+        st.divider()
+
         st.header("🧭 Navigation")
         app_mode = st.radio("Select View:", ["Chat & Query", "Visual Insights Dashboard"])
         
@@ -38,8 +102,25 @@ def main():
         if uploaded_file is not None:
             st.success("File uploaded successfully!")
             # Save uploaded file temporarily
-            with open("temp_uploaded.csv", "wb") as f:
+            file_path = "temp_uploaded.csv"
+            with open(file_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
+
+            # Save dataset to backend if logged in
+            if st.session_state["token"] and "dataset_saved" not in st.session_state:
+                try:
+                    headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                    dataset_data = {"dataset_name": uploaded_file.name, "file_path": file_path}
+                    res = requests.post(f"{API_BASE_URL}/datasets/upload-dataset", json=dataset_data, headers=headers)
+                    if res.status_code == 200:
+                        st.session_state["current_dataset_id"] = res.json()["id"]
+                        st.toast("Dataset saved to your account!")
+                        st.session_state["dataset_saved"] = True
+                except Exception as e:
+                    pass
+        else:
+            if "dataset_saved" in st.session_state:
+                del st.session_state["dataset_saved"]
 
     # Load dataset
     if uploaded_file is not None:
@@ -54,7 +135,7 @@ def main():
     if df is not None and not df.empty:
         st.subheader("Preview Data")
         preview_df = df[[c for c in df.columns if "bplist00" not in c and "WebMainResource" not in c and "NSData" not in c]]
-        st.dataframe(preview_df.head(), use_container_width=True)
+        st.dataframe(preview_df.head(), width="stretch")
 
         st.subheader("Columns")
         st.write(df.columns.tolist())
@@ -103,7 +184,7 @@ def main():
 
         # MIDDLE ROW
         st.header("DATA PREVIEW")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.dataframe(df.head(10), width="stretch")
 
         st.markdown("---")
 
@@ -162,6 +243,20 @@ def main():
 
             st.success("Analysis complete!")
 
+            # Save query to backend if logged in
+            if st.session_state.get("token") and st.session_state.get("current_dataset_id"):
+                try:
+                    headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                    query_data = {
+                        "dataset_id": st.session_state["current_dataset_id"],
+                        "query_text": user_prompt,
+                        "llm_response": llm_response
+                    }
+                    requests.post(f"{API_BASE_URL}/query", json=query_data, headers=headers)
+                    st.toast("Query saved to your account!")
+                except Exception:
+                    pass
+
             # Display results
             st.header("📊 Results")
             
@@ -176,7 +271,7 @@ def main():
 
             if plotly_chart:
                 st.write("**Visual Representation (Plotly):**")
-                st.plotly_chart(plotly_chart, use_container_width=True)
+                st.plotly_chart(plotly_chart, width="stretch")
             elif chart:
                 st.write("**Trend Visualization (Matplotlib):**")
                 st.pyplot(chart)
@@ -268,8 +363,23 @@ def main():
                 st.error(f"Error generating chart: {e}")
             
             if fig is not None:
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
                 
+                # Save chart to backend if logged in
+                if st.session_state.get("token") and st.session_state.get("current_dataset_id"):
+                    if st.button("Save Chart to Dashboard"):
+                        try:
+                            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+                            chart_data = {
+                                "dataset_id": st.session_state["current_dataset_id"],
+                                "chart_config_json": fig.to_json()
+                            }
+                            res = requests.post(f"{API_BASE_URL}/charts/save-chart", json=chart_data, headers=headers)
+                            if res.status_code == 200:
+                                st.success("Chart saved to your account!")
+                        except Exception as e:
+                            st.error(f"Failed to save chart: {e}")
+
                 # SAFE ADDITION: AI Chart Explanation
                 if st.button("Explain this chart"):
                     with st.spinner("Generating explanation..."):

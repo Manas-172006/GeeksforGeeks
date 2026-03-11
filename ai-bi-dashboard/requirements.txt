@@ -8,3 +8,10 @@ python-dotenv
 tabulate
 plotly
 google-generativeai
+fastapi
+uvicorn
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+pydantic[email]
