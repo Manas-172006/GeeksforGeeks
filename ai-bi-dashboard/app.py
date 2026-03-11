@@ -2,18 +2,18 @@ import streamlit as st
 import pandas as pd
 
 # Engines and Utilities
-from dataset_loader import load_dataset, safe_load_csv
-from query_engine import QueryEngine
-from data_analyzer import DataAnalyzer
-from chart_generator import ChartGenerator
-from llm_engine import ask_llm
-from visualization_engine import (
+from src.data.loader import load_dataset, safe_load_csv
+from src.data.query import QueryEngine
+from src.data.analyzer import DataAnalyzer
+from src.visuals.charts import ChartGenerator
+from src.ai.llm_client import ask_llm
+from src.visuals.dashboard import (
     create_histogram, create_scatter, create_boxplot,
     create_bar_chart, create_pie_chart, create_correlation_heatmap, create_line_chart
 )
-from insights_engine import generate_insights, recommend_charts
-from utils.data_utils import check_dataset_health
-from utils.chart_utils import get_chart_options
+from src.ai.insights import generate_insights, recommend_charts
+from src.utils.data_utils import check_dataset_health
+from src.utils.chart_utils import get_chart_options
 
 # Main Streamlit application that:
 # - allows dynamic dataset upload
