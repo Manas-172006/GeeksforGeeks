@@ -197,7 +197,7 @@ def main():
     st.markdown("""
     <div class="main-header">
         <h1>📊 AI Business Intelligence Dashboard</h1>
-        <p class="subtitle">Upload datasets, explore insights, and query data using AI.</p>
+        <p class="subtitle">Upload datasets, explore visual insights, and ask AI questions about your data.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -214,6 +214,7 @@ def main():
             <h3>🔐 Authentication</h3>
         </div>
         """, unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.session_state["token"]:
             st.success(f"Logged in as {st.session_state['user_email']}")
             if st.button("Logout"):
@@ -273,7 +274,6 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         app_mode = st.radio("Select View:", ["Chat & Query", "Visual Insights Dashboard"])
-
         st.markdown("<br>", unsafe_allow_html=True)
 
         st.markdown("""
@@ -317,6 +317,50 @@ def main():
     df = st.session_state.get("df")
 
     if df is not None and not df.empty:
+        # Dataset Summary Panel
+        st.markdown("""
+        <div class="card">
+            <h2>📊 Dataset Summary</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        dataset_name = uploaded_file.name if uploaded_file else "Default Dataset"
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{dataset_name}</div>
+                <div class="metric-label">Dataset Name</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{df.shape[0]:,}</div>
+                <div class="metric-label">Total Rows</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col3:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{df.shape[1]}</div>
+                <div class="metric-label">Total Columns</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        with col4:
+            missing_total = df.isnull().sum().sum()
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{missing_total:,}</div>
+                <div class="metric-label">Missing Values</div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
         <div class="card">
             <h2>📋 Data Preview</h2>
@@ -352,7 +396,12 @@ def main():
 
     # Initialize components depending on the mode
     if app_mode == "Chat & Query":
-        st.markdown("Upload your dataset and ask questions in natural language!")
+        st.markdown("""
+        <div class="card">
+            <h2>💬 Chat & Query Interface</h2>
+            <p>Upload your dataset and ask questions in natural language!</p>
+        </div>
+        """, unsafe_allow_html=True)
 
         query_engine = QueryEngine()
         data_analyzer = DataAnalyzer()
@@ -436,15 +485,73 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         st.dataframe(df.head(10), width="stretch")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # COLUMN EXPLORER
+        st.markdown("""
+        <div class="card">
+            <h2>� Column Explorer</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        selected_column = st.selectbox("Select a column to explore:", df.columns)
+        
+        if selected_column:
+            col_info_col1, col_info_col2 = st.columns(2)
+            
+            with col_info_col1:
+                st.markdown("""
+                <div class="card">
+                    <h4>Column Information</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                col_dtype = df[selected_column].dtype
+                missing_count = df[selected_column].isnull().sum()
+                unique_count = df[selected_column].nunique()
+                
+                st.write(f"**Data Type:** {col_dtype}")
+                st.write(f"**Missing Values:** {missing_count:,}")
+                st.write(f"**Unique Values:** {unique_count:,}")
+                
+            with col_info_col2:
+                st.markdown("""
+                <div class="card">
+                    <h4>Basic Statistics</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if pd.api.types.is_numeric_dtype(df[selected_column]):
+                    st.write(f"**Mean:** {df[selected_column].mean():.2f}")
+                    st.write(f"**Median:** {df[selected_column].median():.2f}")
+                    st.write(f"**Std Dev:** {df[selected_column].std():.2f}")
+                    st.write(f"**Min:** {df[selected_column].min()}")
+                    st.write(f"**Max:** {df[selected_column].max()}")
+                else:
+                    st.write("*Non-numeric column*")
+                    most_common = df[selected_column].value_counts().head(3)
+                    st.write("**Top Values:**")
+                    for val, count in most_common.items():
+                        st.write(f"• {val}: {count:,}")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # BOTTOM ROW - AI Query Engine
+        # Recommended Questions
         st.markdown("""
         <div class="card">
-            <h2>🤖 AI Query Engine</h2>
+            <h4>💡 Example Questions</h4>
+            <p>Try these sample questions to get started:</p>
+            <ul>
+                <li>Which class had the highest survival rate?</li>
+                <li>Show age distribution</li>
+                <li>Compare survival by gender</li>
+                <li>What are the top 5 most common values?</li>
+                <li>Show correlation between numeric columns</li>
+            </ul>
         </div>
         """, unsafe_allow_html=True)
+        
         user_prompt = st.text_area("Enter your query in natural language:", height=100,
                                    placeholder="e.g., What are the top 5 products by sales? Show me a chart of revenue over time.")
 
@@ -532,20 +639,102 @@ def main():
                 st.markdown("""
                 <div class="chart-container">
                     <h3>📈 Visual Representation</h3>
+                    <p>This chart visualizes the data based on your query about "{user_prompt[:50]}{'...' if len(user_prompt) > 50 else ''}".</p>
                 </div>
                 """, unsafe_allow_html=True)
-                st.plotly_chart(plotly_chart, width="stretch")
+                
+                # Chart Grid Layout
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.plotly_chart(plotly_chart, width="stretch")
+                
+                with chart_col2:
+                    st.markdown("""
+                    <div class="card">
+                        <h4>📊 Chart Analysis</h4>
+                        <p><strong>Query:</strong> {user_prompt}</p>
+                        <p><strong>Chart Type:</strong> {parsed_query.get('chart_type', 'Auto-generated')}</p>
+                        <p><strong>Columns Used:</strong> {', '.join(parsed_query.get('matched_columns', []))}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Export Options
+                st.markdown("""
+                <div class="card">
+                    <h4>💾 Export Options</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                export_col1, export_col2 = st.columns(2)
+                
+                with export_col1:
+                    if st.button("📥 Download Chart as PNG"):
+                        st.info("Chart download feature coming soon!")
+                
+                with export_col2:
+                    csv_data = df.to_csv(index=False)
+                    st.download_button(
+                        label="📊 Download Data as CSV",
+                        data=csv_data,
+                        file_name="analysis_data.csv",
+                        mime="text/csv"
+                    )
             elif chart:
                 st.markdown("""
                 <div class="chart-container">
                     <h3>📈 Trend Visualization</h3>
+                    <p>This chart shows the trend analysis based on your query about "{user_prompt[:50]}{'...' if len(user_prompt) > 50 else ''}".</p>
                 </div>
                 """, unsafe_allow_html=True)
-                st.pyplot(chart)
+                
+                # Chart Grid Layout
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.pyplot(chart)
+                
+                with chart_col2:
+                    st.markdown("""
+                    <div class="card">
+                        <h4>📊 Chart Analysis</h4>
+                        <p><strong>Query:</strong> {user_prompt}</p>
+                        <p><strong>Analysis Type:</strong> {parsed_query.get('intent', 'General analysis')}</p>
+                        <p><strong>Columns:</strong> {', '.join(parsed_query.get('matched_columns', []))}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Export Options
+                st.markdown("""
+                <div class="card">
+                    <h4>💾 Export Options</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                export_col1, export_col2 = st.columns(2)
+                
+                with export_col1:
+                    if st.button("📥 Download Chart as PNG"):
+                        st.info("Chart download feature coming soon!")
+                
+                with export_col2:
+                    csv_data = df.to_csv(index=False)
+                    st.download_button(
+                        label="📊 Download Data as CSV",
+                        data=csv_data,
+                        file_name="trend_data.csv",
+                        mime="text/csv"
+                    )
         else:
             st.warning("Please enter a query.")
 
     elif app_mode == "Visual Insights Dashboard":
+        st.markdown("""
+        <div class="card">
+            <h2>📈 Visual Insights Dashboard</h2>
+            <p>Explore your data through interactive charts and automatic insights.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         tab1, tab2, tab3 = st.tabs(["Dataset Overview", "Interactive Charts", "Auto Insights"])
 
         with tab1:
@@ -688,9 +877,47 @@ def main():
                 st.markdown("""
                 <div class="chart-container">
                     <h3>📊 Generated Chart</h3>
+                    <p>This {chart_type.lower()} visualizes the relationship between {x_col} and {y_col if y_col else 'data distribution'}.</p>
                 </div>
                 """, unsafe_allow_html=True)
-                st.plotly_chart(fig, width="stretch")
+                
+                # Chart Grid Layout
+                chart_col1, chart_col2 = st.columns(2)
+                with chart_col1:
+                    st.plotly_chart(fig, width="stretch")
+                
+                with chart_col2:
+                    st.markdown("""
+                    <div class="card">
+                        <h4>📊 Chart Details</h4>
+                        <p><strong>Type:</strong> {chart_type}</p>
+                        <p><strong>X-Axis:</strong> {x_col}</p>
+                        <p><strong>Y-Axis:</strong> {y_col if y_col else 'N/A'}</p>
+                        <p><strong>Color By:</strong> {color_col if color_col else 'N/A'}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                # Export Options
+                st.markdown("""
+                <div class="card">
+                    <h4>💾 Export Options</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                export_col1, export_col2 = st.columns(2)
+                
+                with export_col1:
+                    if st.button("📥 Download Chart as PNG"):
+                        st.info("Chart download feature coming soon!")
+                
+                with export_col2:
+                    csv_data = df.to_csv(index=False)
+                    st.download_button(
+                        label="📊 Download Data as CSV",
+                        data=csv_data,
+                        file_name="chart_data.csv",
+                        mime="text/csv"
+                    )
 
                 # Save chart to backend if logged in
                 if st.session_state.get("token") and st.session_state.get("current_dataset_id"):
@@ -734,14 +961,25 @@ def main():
             else:
                 st.info("No notable insights found for this dataset.")
                 
-            st.divider()
-            st.subheader("🧠 Deeper AI Impressions")
+            st.markdown("""
+            <div class="card">
+                <h3>🧠 Deeper AI Impressions</h3>
+            </div>
+            """, unsafe_allow_html=True)
             if st.button("Generate Deeper AI Insights"):
                 with st.spinner("Analyzing dataset..."):
                     health = check_dataset_health(df)
                     prompt = f"Analyze the following dataset summary and provide 3 key insights in bullet points.\n\nSummary stats:\n{health['summary_text']}"
                     ai_insights = ask_llm(prompt)
                     st.write(ai_insights)
+    
+    # Footer
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem; color: #8892A0; border-top: 1px solid #2A2D3A; margin-top: 3rem;">
+        <p>🚀 AI Business Intelligence Dashboard — Hackathon Demo</p>
+        <p style="font-size: 0.9rem; margin-top: 0.5rem;">Built with Streamlit, Python, and AI</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
