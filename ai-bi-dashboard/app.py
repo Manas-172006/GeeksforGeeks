@@ -836,7 +836,37 @@ def main():
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
         if uploaded_file is not None:
-            st.success("File uploaded successfully!")
+            st.success(f"✅ '{uploaded_file.name}' uploaded successfully!")
+            
+            # Load and validate the dataset immediately
+            with st.spinner("🔄 Loading and validating dataset..."):
+                try:
+                    df = safe_load_csv(uploaded_file)
+                    st.session_state["df"] = df
+                    st.session_state["uploaded_filename"] = uploaded_file.name
+                    
+                    # Show dataset validation results
+                    if not df.empty:
+                        st.success(f"✅ Dataset loaded successfully! Found {df.shape[0]:,} rows and {df.shape[1]} columns.")
+                        
+                        # Show immediate preview in sidebar
+                        st.markdown("---")
+                        st.markdown("### 📋 Quick Preview")
+                        st.dataframe(df.head(3), width="stretch", height=200)
+                        
+                        # Show column information
+                        st.markdown("### 📊 Columns Found")
+                        for i, col in enumerate(df.columns[:5]):  # Show first 5 columns
+                            st.write(f"• {col}")
+                        if len(df.columns) > 5:
+                            st.write(f"... and {len(df.columns) - 5} more columns")
+                    else:
+                        st.error("❌ Failed to load dataset. Please check the file format.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error loading dataset: {str(e)}")
+                    st.session_state["df"] = pd.DataFrame()
+
             # Save uploaded file temporarily
             file_path = "temp_uploaded.csv"
             with open(file_path, "wb") as f:
@@ -850,13 +880,15 @@ def main():
                     res = requests.post(f"{API_BASE_URL}/datasets/upload-dataset", json=dataset_data, headers=headers)
                     if res.status_code == 200:
                         st.session_state["current_dataset_id"] = res.json()["id"]
-                        st.toast("Dataset saved to your account!")
+                        st.toast("🎉 Dataset saved to your account!")
                         st.session_state["dataset_saved"] = True
                 except Exception as e:
-                    pass
+                    st.warning(f"⚠️ Could not save to backend: {str(e)}")
         else:
             if "dataset_saved" in st.session_state:
                 del st.session_state["dataset_saved"]
+            if "uploaded_filename" in st.session_state:
+                del st.session_state["uploaded_filename"]
 
     # Load dataset
     if uploaded_file is not None:
